@@ -100,6 +100,9 @@ void t0_int(void) __interrupt(1)
     }
 }
 
+/*
+    Increments time by 1 second when called
+*/
 void increment_time() {
     P1_7 = !P1_7;
 }
