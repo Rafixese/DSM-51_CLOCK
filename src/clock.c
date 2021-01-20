@@ -28,6 +28,7 @@ unsigned short interrupt_counter;
 
 // Time variables
 unsigned char hour, minute, second;
+unsigned char prev_hour, prev_minute, prev_second;
 unsigned char time_string[6];
 
 // choosen display variables
@@ -44,6 +45,25 @@ __code unsigned char segments[10] = {
 										0b01111111, 0b01101111
 									};
 
+// Multiplex keyboard bit
+__sbit __at (0xB5) MUXK;
+
+// Prev multiplex keyboard state
+unsigned char prev_mux_kbrd_state;
+
+/*
+    Edit mode
+    2 bits controlling edit mode for clock
+
+    high_b  low_b   meaning
+    0       0       edit mode off
+    0       1       edit seconds
+    1       0       edit minutes
+    1       1       edit hours
+*/
+__bit edit_mode_high;
+__bit edit_mode_low;
+
 /*--------------------------------*
  *     Function delcarations      *
  *--------------------------------*/
@@ -54,6 +74,11 @@ void increment_time();
 void _7seg_refresh();
 void _7seg_init();
 
+void edit_init();
+
+void keyboard_action_init();
+void handle_user_input();
+
 void t0_int(void) __interrupt(1);
 
 /*--------------------------------*
@@ -61,6 +86,8 @@ void t0_int(void) __interrupt(1);
  *--------------------------------*/
 void main()
 {
+    edit_init();
+    keyboard_action_init();
     _7seg_init();
     timer_init();
 
@@ -71,6 +98,8 @@ void main()
             interrupt_counter -= INTERRUPT_COUNTER_OVERFLOW;
             increment_time();
         }
+
+        
     }
 }
 
@@ -122,12 +151,24 @@ void _7seg_init()
 	_7seg_refresh();
 }
 
+void edit_init()
+{
+    edit_mode_high = 0;
+    edit_mode_low = 0;
+}
+
+void keyboard_action_init()
+{
+    prev_mux_kbrd_state = 0b00000000;
+}
+
 /*
     Interrupt handling from Timer 0
 */
 void t0_int(void) __interrupt(1)
 {
     _7seg_refresh();
+    handle_user_input();
 
     interrupt_counter++;
 
@@ -145,24 +186,26 @@ void t0_int(void) __interrupt(1)
 */
 void increment_time() 
 {
-    second++;
-    if(second == 60) {
-        second = 0;
-        minute++;
-        if (minute == 60) {
-            minute = 0;
-            hour++;
-            if (hour == 24) {
-                hour = 0;
+    if(edit_mode_high == 0 && edit_mode_low == 0) {
+        second++;
+        if(second == 60) {
+            second = 0;
+            minute++;
+            if (minute == 60) {
+                minute = 0;
+                hour++;
+                if (hour == 24) {
+                    hour = 0;
+                }
+                time_string[5] = hour / 10;
+                time_string[4] = hour % 10;
             }
-            time_string[5] = hour / 10;
-            time_string[4] = hour % 10;
+            time_string[3] = minute / 10;
+            time_string[2] = minute % 10;
         }
-        time_string[3] = minute / 10;
-        time_string[2] = minute % 10;
+        time_string[1] = second / 10;
+        time_string[0] = second % 10;
     }
-    time_string[1] = second / 10;
-    time_string[0] = second % 10;
 }
 
 /*
@@ -170,13 +213,149 @@ void increment_time()
 */
 void _7seg_refresh()
 {
-	P1_6 = 1;
-	*CSDS = choosen_display_flag;
-	*CSDB = segments[time_string[choosen_display]];
-    P1_6 = 0;
-	
-	if (++choosen_display == 6) choosen_display = 0;
+    if (++choosen_display == 6) choosen_display = 0;
 
 	choosen_display_flag = choosen_display_flag << 1;
 	if (choosen_display_flag == 0b01000000) choosen_display_flag = 0b00000001;
+
+	P1_6 = 1;
+	*CSDS = choosen_display_flag;
+	*CSDB = segments[time_string[choosen_display]];
+    if((edit_mode_high == 0 && edit_mode_low == 0) || 
+        interrupt_counter < INTERRUPT_COUNTER_OVERFLOW/2 ||
+        (edit_mode_high == 0 && edit_mode_low == 1 && choosen_display > 1) ||
+        (edit_mode_high == 1 && edit_mode_low == 0 && (choosen_display < 2 || choosen_display > 3)) ||
+        (edit_mode_high == 1 && edit_mode_low == 1 && choosen_display < 4)) {
+        P1_6 = 0;
+    }
+}
+
+/*
+    Handles mux keyboard input
+*/
+void handle_user_input() 
+{
+    unsigned char mux_kbd_state_diff;
+
+    if(MUXK) {
+        mux_kbd_state_diff = (~prev_mux_kbrd_state) & choosen_display_flag;
+        prev_mux_kbrd_state = prev_mux_kbrd_state | choosen_display_flag;
+	}
+	else {
+        mux_kbd_state_diff = 0b00000000;
+        prev_mux_kbrd_state = (~choosen_display_flag) & prev_mux_kbrd_state;
+	}
+
+    // Left arrow
+	if (mux_kbd_state_diff & 0b00100000) {
+		if(edit_mode_high == 0 && edit_mode_low == 1) {
+            edit_mode_high = 1;
+            edit_mode_low = 0;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 0) {
+            edit_mode_low = 1;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 1) {
+            edit_mode_high = 0;
+        }
+	}
+
+    // Downarrow
+	if (mux_kbd_state_diff & 0b00010000) {
+		if(edit_mode_high == 0 && edit_mode_low == 1) {
+            if(second-- == 0) {
+                second = 59;
+            }
+            time_string[1] = second / 10;
+            time_string[0] = second % 10;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 0) {
+            if (minute-- == 0) {
+                minute = 59;
+            }
+            time_string[3] = minute / 10;
+            time_string[2] = minute % 10;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 1) {
+            if (hour-- == 0) {
+                hour = 23;
+            }
+            time_string[5] = hour / 10;
+            time_string[4] = hour % 10;
+	    }
+    }
+
+    // Up arrow
+	if (mux_kbd_state_diff & 0b00001000) {
+		if(edit_mode_high == 0 && edit_mode_low == 1) {
+            second++;
+            if(second == 60) {
+                second = 0;
+            }
+            time_string[1] = second / 10;
+            time_string[0] = second % 10;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 0) {
+            minute++;
+            if (minute == 60) {
+                minute = 0;
+            }
+            time_string[3] = minute / 10;
+            time_string[2] = minute % 10;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 1) {
+            hour++;
+            if (hour == 24) {
+                hour = 0;
+            }
+            time_string[5] = hour / 10;
+            time_string[4] = hour % 10;
+        }
+	}
+
+    // Right arrow
+	if (mux_kbd_state_diff & 0b00000100) {
+		if(edit_mode_high == 0 && edit_mode_low == 1) {
+            edit_mode_high = 1;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 0) {
+            edit_mode_high = 0;
+            edit_mode_low = 1;
+        }
+        else if(edit_mode_high == 1 && edit_mode_low == 1) {
+            edit_mode_low = 0;
+        }
+	}
+
+    // ESC
+	if (mux_kbd_state_diff & 0b00000010) {
+        if(!(edit_mode_high == 0 && edit_mode_low == 0)) {
+            edit_mode_high = 0;
+            edit_mode_low = 0;
+            hour = prev_hour;
+            minute = prev_minute;
+            second = prev_second;
+            time_string[1] = second / 10;
+            time_string[0] = second % 10;
+            time_string[3] = minute / 10;
+            time_string[2] = minute % 10;
+            time_string[5] = hour / 10;
+            time_string[4] = hour % 10;
+        }
+	}
+
+    // ENTER
+	if (mux_kbd_state_diff & 0b00000001) {
+        // Enable edit
+        if(edit_mode_high == 0 && edit_mode_low == 0) {
+            edit_mode_low = 1;
+            prev_hour = hour;
+            prev_minute = minute;
+            prev_second = second;
+        }
+        else {
+            edit_mode_high = 0; 
+            edit_mode_low = 0;
+        }
+	}
 }
