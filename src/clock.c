@@ -69,11 +69,10 @@ __bit edit_mode_low;
 */
 __bit recv_flag;
 __bit send_flag;
-unsigned char recv_buf[12];
+unsigned char recv_buf[15];
 unsigned char recv_index;
 unsigned char send_buf[9];
 unsigned char send_index;
-unsigned char expected_number_of_symbols;
 
 /*--------------------------------*
  *     Function delcarations      *
@@ -120,22 +119,8 @@ void main()
         // Serial transmision
         if(recv_flag) {
             recv_flag = 0;
-            if(recv_index == 1) {
-                if(recv_buf[recv_index - 1] == 'S') {
-                    expected_number_of_symbols = 12;
-                }
-                else if(recv_buf[recv_index - 1] == 'G') {
-                    expected_number_of_symbols = 3;
-                }
-                else if(recv_buf[recv_index - 1] == 'E') {
-                    expected_number_of_symbols = 4;
-                }
-                else {
-                    // Error
-                    recv_index = 0;
-                }
-            }
-            else if (recv_index == expected_number_of_symbols) {
+            if (recv_index > 0 && recv_buf[recv_index - 1] == 10) {
+                P1_7 = !P1_7;
                 handle_command();
             }
         }
@@ -465,11 +450,17 @@ void handle_command()
 {
     __bit error;
     error = 0;
-    if (recv_buf[0] == 'S' && recv_buf[1] == 'E' && recv_buf[2] == 'T' && recv_buf[3] == ' ' && recv_buf[6] == '.' && recv_buf[9] == '.') {
-        unsigned char set_hour, set_minute, set_second;
-        set_hour = (recv_buf[4] - 48) * 10 + recv_buf[5] - 48;
-        set_minute = (recv_buf[7] - 48) * 10 + recv_buf[8] - 48;
-        set_second = (recv_buf[10] - 48) * 10 + recv_buf[11] - 48;
+    if (
+        ((recv_buf[0] == 'S' || recv_buf[0] == 's') && 
+        ((recv_index == 12 && recv_buf[1] == ' ' && recv_buf[4] == '.' && recv_buf[7] == '.') || ((recv_buf[1] == 'E' || recv_buf[1] == 'e') &&
+        ((recv_index == 13 && recv_buf[2] == ' ' && recv_buf[5] == '.' && recv_buf[8] == '.') || ((recv_buf[2] == 'T' || recv_buf[2] == 't') &&
+        (recv_index == 14 && recv_buf[3] == ' ' && recv_buf[6] == '.' && recv_buf[9] == '.'))))))) {
+        
+        unsigned char set_hour, set_minute, set_second, first_number_index;
+        first_number_index = recv_index - 10;
+        set_hour = (recv_buf[first_number_index] - 48) * 10 + recv_buf[first_number_index + 1] - 48;
+        set_minute = (recv_buf[first_number_index + 3] - 48) * 10 + recv_buf[first_number_index + 4] - 48;
+        set_second = (recv_buf[first_number_index + 6] - 48) * 10 + recv_buf[first_number_index + 7] - 48;
 
         if(set_hour > 23 || set_minute > 59 || set_second > 59) {
             error = 1;
@@ -481,7 +472,11 @@ void handle_command()
             update_time_string();
         }
     }
-    else if (recv_buf[0] == 'G' && recv_buf[1] == 'E' && recv_buf[2] == 'T') {
+    else if (
+            (recv_buf[0] == 'G' || recv_buf[0] == 'g') && 
+            (recv_index == 3 || ((recv_buf[1] == 'E' || recv_buf[1] == 'e') &&
+            (recv_index == 4 || ((recv_buf[2] == 'T' || recv_buf[2] == 't') && recv_index == 5))))) {
+        
         send_buf[1] = time_string[0] + 48;
         send_buf[2] = time_string[1] + 48;
         send_buf[3] = '.';
@@ -494,13 +489,21 @@ void handle_command()
         send_flag = 1;
         send_index = 8;
     }
-    else if (recv_buf[0] == 'E' && recv_buf[1] == 'D' && recv_buf[2] == 'I') {
+    else if (
+            (recv_buf[0] == 'E' || recv_buf[0] == 'e') && 
+            (recv_index == 3 || ((recv_buf[1] == 'D' || recv_buf[1] == 'd') && 
+            (recv_index == 4 || ((recv_buf[2] == 'I' || recv_buf[2] == 'i') && 
+            (recv_index == 5 || ((recv_buf[3] == 'T' || recv_buf[3] == 't') && recv_index == 6))))))) {
+        
         if(edit_mode_high == 0 && edit_mode_low == 0) {
             edit_mode_low = 1;
             prev_hour = hour;
             prev_minute = minute;
             prev_second = second;
         }
+    }
+    else {
+        error = 1;
     }
 
     recv_index = 0;
