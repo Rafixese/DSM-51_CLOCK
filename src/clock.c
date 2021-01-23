@@ -115,6 +115,9 @@ void lcd_cmd(unsigned char);
 void lcd_data(unsigned char);
 void lcd_display_history();
 
+unsigned char get_next_history_index(unsigned char);
+unsigned char get_prev_history_index(unsigned char);
+
 void t0_int(void) __interrupt(1);
 void serial_int(void) __interrupt(4)  __using(3);
 
@@ -129,7 +132,6 @@ void main()
     timer_init();
     serial_init();
     lcd_init();
-
     lcd_display_history();
 
     while(1) {
@@ -160,6 +162,17 @@ void main()
 /*--------------------------------*
  *     Function definitions       *
  *--------------------------------*/
+
+unsigned char get_next_history_index(unsigned char curr_index)
+{
+    if(curr_index == 5) return 0;
+    else return ++curr_index;
+}
+unsigned char get_prev_history_index(unsigned char curr_index)
+{
+    if(curr_index == 0) return 5;
+    else return --curr_index;
+}
 
 /*
     Configuration of timer related registers and variables
@@ -260,6 +273,7 @@ void serial_init()
 
 void lcd_init()
 {
+    recent_cmd_index = 5;
     // Clear display
     lcd_cmd(0b00000001);
 
@@ -487,6 +501,7 @@ void handle_user_input()
 */
 void handle_command()
 {
+    unsigned char i;
     __bit error;
     error = 0;
     if (
@@ -545,6 +560,28 @@ void handle_command()
         error = 1;
     }
 
+    // Add command to history
+
+    recent_cmd_index = get_next_history_index(recent_cmd_index);
+    for(i = 0; i < recv_index - 2; i++) {
+        history[recent_cmd_index][i] = recv_buf[i];
+    }
+
+    for(i = recv_index - 2; i < 16; i++) {
+        history[recent_cmd_index][i] = ' ';
+    }
+
+    if(error) {
+        history[recent_cmd_index][13] = 'E';
+        history[recent_cmd_index][14] = 'R';
+        history[recent_cmd_index][15] = 'R';
+    }
+    else {
+        history[recent_cmd_index][14] = 'O';
+        history[recent_cmd_index][15] = 'K';
+    }
+
+    lcd_display_history();
     recv_index = 0;
 }
 
@@ -592,15 +629,17 @@ void lcd_data(unsigned char data_to_send)
 */
 void lcd_display_history()
 {
-    lcd_data('j');
-    lcd_data('e');
-    lcd_data('b');
-    lcd_data('a');
-    lcd_data('c');
+    unsigned char i, prev_index;
+    // Clear display
+    lcd_cmd(0b00000001);
+
+    for(i = 0; i < 16; i++) {
+        lcd_data(history[recent_cmd_index][i]);
+    }
 
     lcd_cmd(0b11000000);
-
-    lcd_data('p');
-    lcd_data('i');
-    lcd_data('s');
+    prev_index = get_prev_history_index(recent_cmd_index);
+    for(i = 0; i < 16; i++) {
+        lcd_data(history[prev_index][i]);
+    }
 }
