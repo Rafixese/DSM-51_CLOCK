@@ -74,6 +74,21 @@ unsigned char recv_index;
 unsigned char send_buf[9];
 unsigned char send_index;
 
+/*
+    Command history
+*/
+
+__xdata __at (0x4000) unsigned char history[6][16];
+unsigned char recent_cmd_index;
+
+/*
+    LCD
+*/
+
+__xdata unsigned char *LCDRC = (__xdata unsigned char *) 0xFF82;
+__xdata unsigned char *LCDWC = (__xdata unsigned char *) 0xFF80;
+__xdata unsigned char *LCDWD = (__xdata unsigned char *) 0xFF81;
+
 /*--------------------------------*
  *     Function delcarations      *
  *--------------------------------*/
@@ -94,6 +109,12 @@ void handle_command();
 
 void update_time_string();
 
+void lcd_init();
+void lcd_wait();
+void lcd_cmd(unsigned char);
+void lcd_data(unsigned char);
+void lcd_display_history();
+
 void t0_int(void) __interrupt(1);
 void serial_int(void) __interrupt(4)  __using(4);
 
@@ -107,6 +128,9 @@ void main()
     _7seg_init();
     timer_init();
     serial_init();
+    lcd_init();
+
+    lcd_display_history();
 
     while(1) {
         // Counter overflow handling
@@ -232,6 +256,21 @@ void serial_init()
     send_flag = 0;
     recv_index = 0;
     send_index = 0;
+}
+
+void lcd_init()
+{
+    // Clear display
+    lcd_cmd(0b00000001);
+
+    // Transmission mode
+    lcd_cmd(0b00111000);
+
+    // Display mode
+    lcd_cmd(0b00001111);
+
+    // Coursor and data field movement
+    lcd_cmd(0b00000110);
 }
 
 /*
@@ -512,11 +551,56 @@ void handle_command()
 /*
     Updates whole time string array based on hour, minute and second variables
 */
-void update_time_string() {
+void update_time_string() 
+{
     time_string[1] = second / 10;
     time_string[0] = second % 10;
     time_string[3] = minute / 10;
     time_string[2] = minute % 10;
     time_string[5] = hour / 10;
     time_string[4] = hour % 10;
+}
+
+/*
+    Wait for LCD to confirm that it is able for receive next command or data
+*/
+void lcd_wait() 
+{
+    while(*LCDRC & 0b10000000);
+}
+
+/*
+    Send command to LCD screen
+*/
+void lcd_cmd(unsigned char cmd_to_send)
+{
+    lcd_wait();
+    *LCDWC = cmd_to_send;
+}
+
+/*
+    Send data to LCD screen
+*/
+void lcd_data(unsigned char data_to_send)
+{
+    lcd_wait();
+    *LCDWD = data_to_send;
+}
+
+/*
+    Display choosen 2 commands in history array
+*/
+void lcd_display_history()
+{
+    lcd_data('j');
+    lcd_data('e');
+    lcd_data('b');
+    lcd_data('a');
+    lcd_data('c');
+
+    lcd_cmd(0b11000000);
+
+    lcd_data('p');
+    lcd_data('i');
+    lcd_data('s');
 }
