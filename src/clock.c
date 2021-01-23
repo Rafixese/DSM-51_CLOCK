@@ -71,7 +71,7 @@ __bit recv_flag;
 __bit send_flag;
 unsigned char recv_buf[12];
 unsigned char recv_index;
-unsigned char send_buf[8];
+unsigned char send_buf[9];
 unsigned char send_index;
 unsigned char expected_number_of_symbols;
 
@@ -141,9 +141,9 @@ void main()
         }
         if(send_flag) {
             send_flag = 0;
-            // if(send_index > 0) {
-            //     SBUF = send_buf[send_index--];
-            // }
+            if(send_index > 0) {
+                SBUF = send_buf[send_index--];
+            }
         }
     }
 }
@@ -463,23 +463,43 @@ void handle_user_input()
 */
 void handle_command()
 {
-    __bit parse_error;
-    parse_error = 0;
+    __bit error;
+    error = 0;
     if (recv_buf[0] == 'S' && recv_buf[1] == 'E' && recv_buf[2] == 'T' && recv_buf[3] == ' ' && recv_buf[6] == '.' && recv_buf[9] == '.') {
         unsigned char set_hour, set_minute, set_second;
-        P1_7 = !P1_7;
         set_hour = (recv_buf[4] - 48) * 10 + recv_buf[5] - 48;
         set_minute = (recv_buf[7] - 48) * 10 + recv_buf[8] - 48;
         set_second = (recv_buf[10] - 48) * 10 + recv_buf[11] - 48;
 
         if(set_hour > 23 || set_minute > 59 || set_second > 59) {
-            parse_error = 1;
+            error = 1;
         }
         else {
             hour = set_hour;
             minute = set_minute;
             second = set_second;
             update_time_string();
+        }
+    }
+    else if (recv_buf[0] == 'G' && recv_buf[1] == 'E' && recv_buf[2] == 'T') {
+        send_buf[1] = time_string[0] + 48;
+        send_buf[2] = time_string[1] + 48;
+        send_buf[3] = '.';
+        send_buf[4] = time_string[2] + 48;
+        send_buf[5] = time_string[3] + 48;
+        send_buf[6] = '.';
+        send_buf[7] = time_string[4] + 48;
+        send_buf[8] = time_string[5] + 48;
+
+        send_flag = 1;
+        send_index = 8;
+    }
+    else if (recv_buf[0] == 'E' && recv_buf[1] == 'D' && recv_buf[2] == 'I') {
+        if(edit_mode_high == 0 && edit_mode_low == 0) {
+            edit_mode_low = 1;
+            prev_hour = hour;
+            prev_minute = minute;
+            prev_second = second;
         }
     }
 
