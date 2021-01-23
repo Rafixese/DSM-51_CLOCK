@@ -116,7 +116,7 @@ void lcd_data(unsigned char);
 void lcd_display_history();
 
 void t0_int(void) __interrupt(1);
-void serial_int(void) __interrupt(4)  __using(4);
+void serial_int(void) __interrupt(4)  __using(3);
 
 /*--------------------------------*
  *              MAIN              *
