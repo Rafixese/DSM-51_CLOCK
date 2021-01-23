@@ -64,6 +64,17 @@ unsigned char prev_mux_kbrd_state;
 __bit edit_mode_high;
 __bit edit_mode_low;
 
+/*
+    Serial transmission
+*/
+__bit recv_flag;
+__bit send_flag;
+unsigned char recv_buf[12];
+unsigned char recv_index;
+unsigned char send_buf[8];
+unsigned char send_index;
+unsigned char expected_number_of_symbols;
+
 /*--------------------------------*
  *     Function delcarations      *
  *--------------------------------*/
@@ -79,7 +90,13 @@ void edit_init();
 void keyboard_action_init();
 void handle_user_input();
 
+void serial_init();
+void handle_command();
+
+void update_time_string();
+
 void t0_int(void) __interrupt(1);
+void serial_int(void) __interrupt(4)  __using(4);
 
 /*--------------------------------*
  *              MAIN              *
@@ -90,6 +107,7 @@ void main()
     keyboard_action_init();
     _7seg_init();
     timer_init();
+    serial_init();
 
     while(1) {
         // Counter overflow handling
@@ -99,7 +117,34 @@ void main()
             increment_time();
         }
 
-        
+        // Serial transmision
+        if(recv_flag) {
+            recv_flag = 0;
+            if(recv_index == 1) {
+                if(recv_buf[recv_index - 1] == 'S') {
+                    expected_number_of_symbols = 12;
+                }
+                else if(recv_buf[recv_index - 1] == 'G') {
+                    expected_number_of_symbols = 3;
+                }
+                else if(recv_buf[recv_index - 1] == 'E') {
+                    expected_number_of_symbols = 4;
+                }
+                else {
+                    // Error
+                    recv_index = 0;
+                }
+            }
+            else if (recv_index == expected_number_of_symbols) {
+                handle_command();
+            }
+        }
+        if(send_flag) {
+            send_flag = 0;
+            // if(send_index > 0) {
+            //     SBUF = send_buf[send_index--];
+            // }
+        }
     }
 }
 
@@ -162,6 +207,48 @@ void keyboard_action_init()
     prev_mux_kbrd_state = 0b00000000;
 }
 
+void serial_init()
+{
+    /*
+        SCON configuration
+        target mode -> 8bit, M0=0, M1=1
+    */
+    SCON = 0b01010000;
+
+    /*
+        Timer 1 configuration -> mode 2
+    */
+    TMOD = TMOD & 0b00101111; // GATE1=0, CT1=0, T1M1=?, T1M0=0, GATE0=?, CT0=?, T0M1=?, T0M0=?
+    TMOD = TMOD | 0b00100000; // GATE1=?, CT1=?, T1M1=1, T1M0=?, GATE0=?, CT0=?, T0M1=?, T0M0=?
+
+    /*
+        T1 = 250 => baudrate = 4800
+    */
+    TL1 = 250;
+    TH1 = 250;
+
+    /*
+        SCON = 0
+    */
+    PCON = PCON & 0b01111111;
+
+    // TF1
+    TF1 = 0;
+
+    // TR1, start counting
+    TR1 = 1;
+
+    // Interrupts
+    ES = 1;
+    EA = 1;
+
+    // Variable init
+    recv_flag = 0;
+    send_flag = 0;
+    recv_index = 0;
+    send_index = 0;
+}
+
 /*
     Interrupt handling from Timer 0
 */
@@ -176,6 +263,22 @@ void t0_int(void) __interrupt(1)
 
     if (interrupt_counter >= INTERRUPT_COUNTER_OVERFLOW) {
         counter_overflow_flag = 1;
+    }
+}
+
+/*
+    Interrupt handling from serial port
+*/
+void serial_int(void) __interrupt(4)  __using(4)  
+{
+    if (RI) {
+        recv_buf[recv_index++] = SBUF;
+        RI = 0;
+        recv_flag = 1;
+    }
+    else {
+        TI = 0;
+        send_flag = 1;
     }
 }
 
@@ -335,12 +438,7 @@ void handle_user_input()
             hour = prev_hour;
             minute = prev_minute;
             second = prev_second;
-            time_string[1] = second / 10;
-            time_string[0] = second % 10;
-            time_string[3] = minute / 10;
-            time_string[2] = minute % 10;
-            time_string[5] = hour / 10;
-            time_string[4] = hour % 10;
+            update_time_string();
         }
 	}
 
@@ -358,4 +456,44 @@ void handle_user_input()
             edit_mode_low = 0;
         }
 	}
+}
+
+/*
+    Handles command input from serial port
+*/
+void handle_command()
+{
+    __bit parse_error;
+    parse_error = 0;
+    if (recv_buf[0] == 'S' && recv_buf[1] == 'E' && recv_buf[2] == 'T' && recv_buf[3] == ' ' && recv_buf[6] == '.' && recv_buf[9] == '.') {
+        unsigned char set_hour, set_minute, set_second;
+        P1_7 = !P1_7;
+        set_hour = (recv_buf[4] - 48) * 10 + recv_buf[5] - 48;
+        set_minute = (recv_buf[7] - 48) * 10 + recv_buf[8] - 48;
+        set_second = (recv_buf[10] - 48) * 10 + recv_buf[11] - 48;
+
+        if(set_hour > 23 || set_minute > 59 || set_second > 59) {
+            parse_error = 1;
+        }
+        else {
+            hour = set_hour;
+            minute = set_minute;
+            second = set_second;
+            update_time_string();
+        }
+    }
+
+    recv_index = 0;
+}
+
+/*
+    Updates whole time string array based on hour, minute and second variables
+*/
+void update_time_string() {
+    time_string[1] = second / 10;
+    time_string[0] = second % 10;
+    time_string[3] = minute / 10;
+    time_string[2] = minute % 10;
+    time_string[5] = hour / 10;
+    time_string[4] = hour % 10;
 }
