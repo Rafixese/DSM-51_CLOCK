@@ -79,7 +79,7 @@ unsigned char send_index;
 */
 
 __xdata __at (0x4000) unsigned char history[6][16];
-unsigned char recent_cmd_index;
+unsigned char recent_cmd_index, curr_cmd_index;
 
 /*
     LCD
@@ -88,6 +88,12 @@ unsigned char recent_cmd_index;
 __xdata unsigned char *LCDRC = (__xdata unsigned char *) 0xFF82;
 __xdata unsigned char *LCDWC = (__xdata unsigned char *) 0xFF80;
 __xdata unsigned char *LCDWD = (__xdata unsigned char *) 0xFF81;
+
+// Matrix kbrd
+__xdata unsigned char *CSKB1 = (__xdata unsigned char *) 0xFF22;
+
+// Prev matrix keyboard state
+unsigned char prev_matrix_kbrd_state;
 
 /*--------------------------------*
  *     Function delcarations      *
@@ -102,7 +108,8 @@ void _7seg_init();
 void edit_init();
 
 void keyboard_action_init();
-void handle_user_input();
+void handle_mux_kbrd_user_input();
+void handle_matrix_kbrd_user_input();
 
 void serial_init();
 void handle_command();
@@ -227,6 +234,7 @@ void edit_init()
 void keyboard_action_init()
 {
     prev_mux_kbrd_state = 0b00000000;
+    prev_matrix_kbrd_state = 0b00000000;
 }
 
 void serial_init()
@@ -293,7 +301,8 @@ void lcd_init()
 void t0_int(void) __interrupt(1)
 {
     _7seg_refresh();
-    handle_user_input();
+    handle_mux_kbrd_user_input();
+    handle_matrix_kbrd_user_input();
 
     interrupt_counter++;
 
@@ -374,7 +383,7 @@ void _7seg_refresh()
 /*
     Handles mux keyboard input
 */
-void handle_user_input() 
+void handle_mux_kbrd_user_input() 
 {
     unsigned char mux_kbd_state_diff;
 
@@ -497,6 +506,28 @@ void handle_user_input()
 }
 
 /*
+    Handles matrix keyboard input
+*/
+void handle_matrix_kbrd_user_input()
+{
+    unsigned char state_diff;
+	state_diff = (~prev_matrix_kbrd_state) & (~*CSKB1);
+	prev_matrix_kbrd_state = ~*CSKB1;
+
+	// Strzałka w górę
+	if (state_diff & (1 << 4)) {
+		curr_cmd_index = get_next_history_index(curr_cmd_index);
+        lcd_display_history();
+	}
+
+	// Strzałka w dół
+	if (state_diff & (1 << 5)) {
+		curr_cmd_index = get_prev_history_index(curr_cmd_index);
+        lcd_display_history();
+	}
+}
+
+/*
     Handles command input from serial port
 */
 void handle_command()
@@ -580,7 +611,7 @@ void handle_command()
         history[recent_cmd_index][14] = 'O';
         history[recent_cmd_index][15] = 'K';
     }
-
+    curr_cmd_index = recent_cmd_index;
     lcd_display_history();
     recv_index = 0;
 }
@@ -634,11 +665,11 @@ void lcd_display_history()
     lcd_cmd(0b00000001);
 
     for(i = 0; i < 16; i++) {
-        lcd_data(history[recent_cmd_index][i]);
+        lcd_data(history[curr_cmd_index][i]);
     }
 
     lcd_cmd(0b11000000);
-    prev_index = get_prev_history_index(recent_cmd_index);
+    prev_index = get_prev_history_index(curr_cmd_index);
     for(i = 0; i < 16; i++) {
         lcd_data(history[prev_index][i]);
     }
