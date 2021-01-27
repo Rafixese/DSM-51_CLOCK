@@ -69,7 +69,7 @@ __bit edit_mode_low;
 */
 __bit recv_flag;
 __bit send_flag;
-unsigned char recv_buf[15];
+unsigned char recv_buf[14];
 unsigned char recv_index;
 unsigned char send_buf[9];
 unsigned char send_index;
@@ -319,6 +319,7 @@ void t0_int(void) __interrupt(1)
 void serial_int(void) __interrupt(4)  __using(4)  
 {
     if (RI) {
+        if(recv_index > 13) recv_index = 0;
         recv_buf[recv_index++] = SBUF;
         RI = 0;
         recv_flag = 1;
