@@ -71,7 +71,7 @@ __bit recv_flag;
 __bit send_flag;
 unsigned char recv_buf[14];
 unsigned char recv_index;
-unsigned char send_buf[9];
+unsigned char send_buf[11];
 unsigned char send_index;
 
 /*
@@ -277,6 +277,8 @@ void serial_init()
     send_flag = 0;
     recv_index = 0;
     send_index = 0;
+    send_buf[1] = 10;
+    send_buf[2] = 13;
 }
 
 void lcd_init()
@@ -563,17 +565,17 @@ void handle_command()
             (recv_index == 3 || ((recv_buf[1] == 'E' || recv_buf[1] == 'e') &&
             (recv_index == 4 || ((recv_buf[2] == 'T' || recv_buf[2] == 't') && recv_index == 5))))) {
         
-        send_buf[1] = time_string[0] + 48;
-        send_buf[2] = time_string[1] + 48;
-        send_buf[3] = '.';
-        send_buf[4] = time_string[2] + 48;
-        send_buf[5] = time_string[3] + 48;
-        send_buf[6] = '.';
-        send_buf[7] = time_string[4] + 48;
-        send_buf[8] = time_string[5] + 48;
+        send_buf[3] = time_string[0] + 48;
+        send_buf[4] = time_string[1] + 48;
+        send_buf[5] = '.';
+        send_buf[6] = time_string[2] + 48;
+        send_buf[7] = time_string[3] + 48;
+        send_buf[8] = '.';
+        send_buf[9] = time_string[4] + 48;
+        send_buf[10] = time_string[5] + 48;
 
         send_flag = 1;
-        send_index = 8;
+        send_index = 10;
     }
     else if (
             (recv_buf[0] == 'E' || recv_buf[0] == 'e') && 
