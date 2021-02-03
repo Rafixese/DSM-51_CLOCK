@@ -84,7 +84,7 @@ __bit recv_flag;
 __bit send_flag;
 unsigned char recv_buf[14];
 unsigned char recv_index;
-unsigned char send_buf[11];
+unsigned char send_buf[10];
 unsigned char send_index;
 
 /*
@@ -290,8 +290,7 @@ void serial_init()
     send_flag = 0;
     recv_index = 0;
     send_index = 0;
-    send_buf[1] = 10;
-    send_buf[2] = 13;
+    send_buf[1] = '\n';
 }
 
 void lcd_init()
@@ -413,7 +412,7 @@ void handle_mux_kbrd_user_input()
 	}
 
     // Left arrow
-	if (mux_kbd_state_diff & 0b00100000) {
+	if (mux_kbd_state_diff & 0b00100000 && prev_mux_kbrd_state == 0b00100000) {
 		if(edit_mode_high == 0 && edit_mode_low == 1) {
             edit_mode_high = 1;
             edit_mode_low = 0;
@@ -427,7 +426,7 @@ void handle_mux_kbrd_user_input()
 	}
 
     // Downarrow
-	if (mux_kbd_state_diff & 0b00010000) {
+	if (mux_kbd_state_diff & 0b00010000 && prev_mux_kbrd_state == 0b00010000) {
 		if(edit_mode_high == 0 && edit_mode_low == 1) {
             if(second-- == 0) {
                 second = 59;
@@ -452,7 +451,7 @@ void handle_mux_kbrd_user_input()
     }
 
     // Up arrow
-	if (mux_kbd_state_diff & 0b00001000) {
+	if (mux_kbd_state_diff & 0b00001000 && prev_mux_kbrd_state == 0b00001000) {
 		if(edit_mode_high == 0 && edit_mode_low == 1) {
             second++;
             if(second == 60) {
@@ -480,7 +479,7 @@ void handle_mux_kbrd_user_input()
 	}
 
     // Right arrow
-	if (mux_kbd_state_diff & 0b00000100) {
+	if (mux_kbd_state_diff & 0b00000100 && prev_mux_kbrd_state == 0b00000100) {
 		if(edit_mode_high == 0 && edit_mode_low == 1) {
             edit_mode_high = 1;
         }
@@ -494,7 +493,7 @@ void handle_mux_kbrd_user_input()
 	}
 
     // ESC
-	if (mux_kbd_state_diff & 0b00000010) {
+	if (mux_kbd_state_diff & 0b00000010 && prev_mux_kbrd_state == 0b00000010) {
         if(!(edit_mode_high == 0 && edit_mode_low == 0)) {
             edit_mode_high = 0;
             edit_mode_low = 0;
@@ -506,7 +505,7 @@ void handle_mux_kbrd_user_input()
 	}
 
     // ENTER
-	if (mux_kbd_state_diff & 0b00000001) {
+	if (mux_kbd_state_diff & 0b00000001 && prev_mux_kbrd_state == 0b00000001) {
         // Enable edit
         if(edit_mode_high == 0 && edit_mode_low == 0) {
             edit_mode_low = 1;
@@ -532,13 +531,13 @@ void handle_matrix_kbrd_user_input()
 	prev_matrix_kbrd_state = ~*CSKB1;
 
 	// Strzałka w górę
-	if (state_diff & (1 << 4)) {
+	if (state_diff & (1 << 4) && prev_matrix_kbrd_state == (1 << 4)) {
 		curr_cmd_index = get_next_history_index(curr_cmd_index);
         lcd_display_history();
 	}
 
 	// Strzałka w dół
-	if (state_diff & (1 << 5)) {
+	if (state_diff & (1 << 5) && prev_matrix_kbrd_state == (1 << 5)) {
 		curr_cmd_index = get_prev_history_index(curr_cmd_index);
         lcd_display_history();
 	}
@@ -579,17 +578,17 @@ void handle_command()
             (recv_index == 3 || ((recv_buf[1] == 'E' || recv_buf[1] == 'e') &&
             (recv_index == 4 || ((recv_buf[2] == 'T' || recv_buf[2] == 't') && recv_index == 5))))) {
         
-        send_buf[3] = time_string[0] + 48;
-        send_buf[4] = time_string[1] + 48;
-        send_buf[5] = '.';
-        send_buf[6] = time_string[2] + 48;
-        send_buf[7] = time_string[3] + 48;
-        send_buf[8] = '.';
-        send_buf[9] = time_string[4] + 48;
-        send_buf[10] = time_string[5] + 48;
+        send_buf[2] = time_string[0] + 48;
+        send_buf[3] = time_string[1] + 48;
+        send_buf[4] = '.';
+        send_buf[5] = time_string[2] + 48;
+        send_buf[6] = time_string[3] + 48;
+        send_buf[7] = '.';
+        send_buf[8] = time_string[4] + 48;
+        send_buf[9] = time_string[5] + 48;
 
         send_flag = 1;
-        send_index = 10;
+        send_index = 9;
     }
     else if (
             (recv_buf[0] == 'E' || recv_buf[0] == 'e') && 
