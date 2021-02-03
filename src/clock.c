@@ -4,6 +4,19 @@
  *          Rafał Hrabia          *
  *--------------------------------*/
 
+ /*
+    INFO DOC
+
+    Obsługa portu szeregowego
+    baudrate - 4800
+    liczba bitów pomiędzy bajtami - 2
+    COM 1
+
+    Polecenia w transmisji szeregowej akceptowane przez ENTER
+
+    Aktywacja trybu edycji - klawisz ENTER na klawiaturze multipleksowanej
+ */
+
 #include <8051.h>
 
 /*--------------------------------*
