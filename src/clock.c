@@ -517,6 +517,7 @@ void handle_mux_kbrd_user_input()
         else {
             edit_mode_high = 0; 
             edit_mode_low = 0;
+            interrupt_counter = 0;
         }
 	}
 }
